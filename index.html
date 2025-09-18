@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Liquid Glass на основе физики</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    .background {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      background: url('https://picsum.photos/1600/900') no-repeat center center;
+      background-size: cover;
+    }
+
+    #glass-panel {
+      width: 450px;
+      height: 300px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+
+       -webkit-backdrop-filter: url(#liquid-glass-filter);
+      backdrop-filter: url(#liquid-glass-filter);
+    }
+
+    .content {
+      padding: 40px;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="background">
+  <div id="glass-panel">
+    <div class="content">
+      <h2>Liquid Glass</h2>
+      <p>Этот эффект преломления сгенерирован динамически на основе математической функции поверхности.</p>
+    </div>
+  </div>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="liquid-glass-filter" color-interpolation-filters="sRGB">
+      <feImage
+        href=""
+        x="0" y="0" width="450" height="300"
+        result="displacement_map"
+      />
+      <feDisplacementMap
+        in="SourceGraphic"
+        in2="displacement_map"
+        scale="0" xChannelSelector="R"
+        yChannelSelector="G"
+      />
+    </filter>
+  </defs>
+</svg>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const panel = document.getElementById('glass-panel');
+    const rect = panel.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+ 
+    const borderWidth = 50;  
+    const f = (x) => 1 - Math.pow(1 - x, 2); // f(0)=0, f(1)=1
+
+     const vectors = [];
+    let maxMagnitude = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+         const distanceFromSide = Math.min(x, y, width - x, height - y);
+
+        let magnitude = 0;
+        let angle = 0;
+
+        if (distanceFromSide < borderWidth) {
+           const distanceNormalized = distanceFromSide / borderWidth;
+
+           const delta = 0.001;
+          const y1 = f(distanceNormalized - delta);
+          const y2 = f(distanceNormalized + delta);
+          const derivative = (y2 - y1) / (2 * delta);
+          magnitude = derivative;
+
+           const dx = x - width / 2;
+          const dy = y - height / 2;
+          angle = Math.atan2(dy, dx);
+        }
+
+        vectors.push({ angle, magnitude });
+        if (magnitude > maxMagnitude) {
+          maxMagnitude = magnitude;
+        }
+      }
+    }
+
+     const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(width, height);
+    const data = imageData.data;
+
+    for (let i = 0; i < vectors.length; i++) {
+      const { angle, magnitude } = vectors[i];
+
+       const normalizedMagnitude = magnitude / maxMagnitude;
+
+       const vec_x = Math.cos(angle) * normalizedMagnitude;
+      const vec_y = Math.sin(angle) * normalizedMagnitude;
+
+      const idx = i * 4;
+       data[idx]     = 128 + vec_x * 127; // Red канал (X смещение)
+      data[idx + 1] = 128 + vec_y * 127; // Green канал (Y смещение)
+      data[idx + 2] = 128;               // Blue канал (не используется)
+      data[idx + 3] = 255;               // Alpha канал (непрозрачный)
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    const displacementMapDataUrl = canvas.toDataURL();
+
+     const feImage = document.querySelector('#liquid-glass-filter feImage');
+    const feDisplacementMap = document.querySelector('#liquid-glass-filter feDisplacementMap');
+
+    feImage.setAttribute('href', displacementMapDataUrl);
+     feDisplacementMap.setAttribute('scale', maxMagnitude * 30);
+  });
+</script>
+</body>
+</html>
